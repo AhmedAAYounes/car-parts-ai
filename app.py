@@ -8,8 +8,8 @@ st.set_page_config(page_title="مكتشف قطع الغيار الذكي", page_
 st.title("⚙️ نظام فحص أجزاء السيارة")
 
 # 2. بيانات الربط (حط بياناتك هنا)
-HF_TOKEN = "hf_xxxxxxxxxxxxxxxxxxxx" # التوكين بتاعك
-API_URL = "https://api-inference.huggingface.co/models/username/space_name" # لينك السبيس
+HF_TOKEN = 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 # التوكين بتاعك
+API_URL = "https://api-inference.huggingface.co/models/el7resh/car-parts-ai" # لينك السبيس
 
 headers = {"Authorization": f"Bearer {HF_TOKEN}"}
 
