@@ -1,74 +1,60 @@
 import streamlit as st
 from gradio_client import Client, handle_file
 from PIL import Image
-import io
+import os
 
-# 1. إعدادات الصفحة
+# 1. إعدادات الموقع
 st.set_page_config(page_title="مكتشف قطع الغيار الذكي", page_icon="⚙️")
-st.title("⚙️ نظام فحص أجزاء السيارة")
+st.title("⚙️ نظام فحص أجزاء السيارة الذكي")
 
 # 2. الربط بالسيرفر
 try:
     client = Client("el7resh/car-parts-ai-v2")
-except Exception as e:
-    st.error("السيرفر لسه بيقوم.. استنى ثواني وجرب تاني")
+except:
+    st.error("السيرفر جاري تشغيله.. يرجى الانتظار دقيقة")
 
-# 3. القاموس العربي
-parts_dictionary = {
-    "Engine": {"ar": "المحرك", "desc": "قلب السيارة.", "note": "حافظ على الزيت."},
-    "Transmission": {"ar": "ناقل الحركة (الفتيس)", "desc": "مسؤول عن السرعات.", "note": "افحص الزيت بانتظام."},
-    "Battery": {"ar": "البطارية", "desc": "مصدر الكهرباء.", "note": "تأكد من نظافة الأقطاب."},
-    "Exhaust": {"ar": "الشكمان", "desc": "طرد الغازات.", "note": "الدخان الأسود مشكلة."},
-    "Radiator": {"ar": "الردياتير", "desc": "تبريد الموتور.", "note": "لا تفتح الغطاء وهو ساخن."},
-    "Alternator": {"ar": "الدينامو", "desc": "شحن البطارية.", "note": "لو لمبة البطارية نورت يبقى العيب منه."},
-    # زود أي كلمة تظهرلك هنا بنفس الطريقة
+# 3. القاموس العربي الشامل
+parts_dict = {
+    "Engine": {"ar": "المحرك (الموتور)", "desc": "قلب السيارة المسؤول عن الحركة.", "note": "تأكد من تغيير الزيت بانتظام."},
+    "Transmission": {"ar": "ناقل الحركة (الفتيس)", "desc": "المسؤول عن نقل السرعات.", "note": "افحص زيت الفتيس كل 40 ألف كم."},
+    "Battery": {"ar": "البطارية", "desc": "مصدر الطاقة الكهربائية للبدء.", "note": "تأكد من نظافة الأقطاب من الأملاح."},
+    "Exhaust": {"ar": "نظام العادم (الشكمان)", "desc": "طرد غازات الاحتراق وتبريدها.", "note": "الدخان الأسود يعني حرق وقود زائد."},
+    "Radiator": {"ar": "الردياتير", "desc": "تبريد محرك السيارة.", "note": "لا تفتح الغطاء والمحرك ساخن."},
+    "Alternator": {"ar": "الدينامو", "desc": "شحن البطارية وتوليد الكهرباء.", "note": "لو لمبة البطارية نورت يبقى العيب منه."},
+    "Air Filter": {"ar": "فلتر الهواء", "desc": "تنقية الهواء الداخل للمحرك.", "note": "الفلتر المسدود يقلل عزم السيارة."},
+    "Spark Plugs": {"ar": "البوجيهات", "desc": "توليد شرارة الاحتراق.", "note": "تغييرها يحسن استهلاك البنزين."},
 }
 
-uploaded_file = st.file_uploader("ارفع صورة القطعة...", type=["jpg", "png", "jpeg"])
+uploaded_file = st.file_uploader("ارفع صورة قطعة الغيار...", type=["jpg", "png", "jpeg"])
 
 if uploaded_file:
     img = Image.open(uploaded_file)
     st.image(img, caption="الصورة المرفوعة", use_container_width=True)
     
-    if st.button("بدء الفحص الذكي"):
-        with st.spinner("جاري تحليل الصورة..."):
+    if st.button("بدء الفحص بالذكاء الاصطناعي"):
+        with st.spinner("جاري الاتصال بالسيرفر وفحص الصورة..."):
             try:
-                # حفظ الصورة مؤقتاً
-                temp_path = "temp_image.jpg"
+                # حفظ مؤقت للصورة
+                temp_path = "temp_img.jpg"
                 img.save(temp_path)
                 
-                # إرسال الصورة للسيرفر - ركز في قفلة القوس هنا
+                # الفحص باستخدام الربط الرسمي
                 result = client.predict(
                     image=handle_file(temp_path),
                     api_name="/predict"
                 )
                 
-                # القائمة دي لازم تكون شاملة وبنفس ترتيب تدريب الموديل
-# أنا زودت عدد الاحتمالات عشان نمنع أيرور الـ Index
-labels = [
-    "Engine", "Transmission", "Battery", "Alternator", "Radiator", 
-    "Water Pump", "Fuel Pump", "Starter", "Spark Plugs", "Cooling Fans", 
-    "Headlights", "Exhaust", "Fuel Filter", "Air Filter", "Brake Disc",
-    "Suspension", "Oil Filter", "Tyre", "Steering Wheel", "Gear Shifter"
-]
-
-def predict(image):
-    try:
-        input_shape = input_details[0]['shape']
-        img = image.resize((input_shape[1], input_shape[2])).convert('RGB')
-        img_array = np.array(img, dtype=np.float32) / 255.0
-        img_array = np.expand_dims(img_array, axis=0)
-
-        interpreter.set_tensor(input_details[0]['index'], img_array)
-        interpreter.invoke()
-        output_data = interpreter.get_tensor(output_details[0]['index'])
-        
-        # الحركة دي بتمنع الأيرور: لو الرقم كبير بياخد آخر عنصر في القائمة
-        prediction_index = np.argmax(output_data[0])
-        if prediction_index < len(labels):
-            return labels[prediction_index]
-        else:
-            return "Unknown Part"
-            
-    except Exception as e:
-        return f"Error: {str(e)}"
+                # عرض النتيجة بالعربي
+                if result in parts_dict:
+                    data = parts_dict[result]
+                    st.success(f"✅ تم التعرف على: {data['ar']}")
+                    st.info(f"ℹ️ **الوظيفة:** {data['desc']}\n\n💡 **نصيحة:** {data['note']}")
+                else:
+                    st.warning(f"🔍 النتيجة: {result} (هذه القطعة غير مسجلة في القاموس العربي حالياً)")
+                
+                # مسح الصورة المؤقتة
+                if os.path.exists(temp_path):
+                    os.remove(temp_path)
+                    
+            except Exception as e:
+                st.error(f"حدث خطأ في الاتصال: {str(e)}")
