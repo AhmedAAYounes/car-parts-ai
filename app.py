@@ -2,26 +2,23 @@ import streamlit as st
 from PIL import Image
 import numpy as np
 
-st.title("نظام التعرف الذكي على قطع السيارات 🚗")
-st.write("ارفع صورة لقطعة الغيار وسأخبرك ما هي!")
+# إعدادات الصفحة
+st.set_page_config(page_title="مكتشف قطع الغيار", page_icon="🏎️")
+
+st.title("🏎️ نظام التعرف الذكي على قطع السيارات")
+st.write("ارفع صورة لقطعة الغيار وسأخبرك ما هي (نسخة تجريبية)")
 
 # رفع الصورة
-uploaded_file = st.file_plus("اختر صورة قطعة غيار...", type=["jpg", "png", "jpeg"])
+uploaded_file = st.file_uploader("اختر صورة قطعة غيار...", type=["jpg", "png", "jpeg"])
 
 if uploaded_file is not None:
+    # عرض الصورة المرفوعة
     image = Image.open(uploaded_file)
     st.image(image, caption='الصورة المرفوعة', use_column_width=True)
     
-    # تحميل النموذج
-    model = tf.keras.models.load_model('car_parts_model.h5')
+    st.info("جاري تجهيز النظام... الموقع اشتغل يا هندسة! الخطوة الجاية هنفعل الذكاء الاصطناعي.")
     
-    # معالجة الصورة لتناسب النموذج
+    # معالجة الصورة داخلياً للتأكد من سلامة الكود
     img = image.resize((224, 224))
     img_array = np.array(img) / 255.0
     img_array = np.expand_dims(img_array, axis=0)
-    
-    # التوقع
-    predictions = model.predict(img_array)
-    decoded = tf.keras.applications.mobilenet_v2.decode_predictions(predictions, top=1)[0]
-    
-    st.success(f"النتيجة: هذه القطعة هي غالباً {decoded[0][1]}")
