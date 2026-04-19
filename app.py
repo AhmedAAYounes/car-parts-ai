@@ -10,7 +10,7 @@ st.title("⚙️ نظام فحص أجزاء السيارة")
 
 # 2. بيانات الربط (التوكين والروابط اللي إنت عملتها)
 HF_TOKEN = "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"
-API_URL = "https://el7resh-car-parts-ai-v2.hf.space/predict"
+API_URL = "https://el7resh-car-parts-ai-v2.hf.space"
 headers = {"Authorization": f"Bearer {HF_TOKEN}"}
 
 # 3. القاموس العربي
