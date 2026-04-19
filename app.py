@@ -1,68 +1,52 @@
-import gradio as gr
-import numpy as np
+import streamlit as st
 from PIL import Image
-import os
+import requests
+import io
+import base64
 
-# بنحاول نستورد المكتبة ولو مش موجودة بنطلع رسالة واضحة
-try:
-    import tflite_runtime.interpreter as tflite
-except ImportError:
-    import tensorflow.lite as tflite
+# 1. إعدادات الموقع
+st.set_page_config(page_title="مكتشف قطع الغيار الذكي", page_icon="⚙️")
+st.title("⚙️ نظام فحص أجزاء السيارة")
 
-# 1. التأكد من وجود ملف الموديل في المكان الصح
-model_path = "model.tflite"
+# 2. بيانات الربط (التوكين والروابط اللي إنت عملتها)
+HF_TOKEN = "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"
+API_URL = "https://el7resh-car-parts-ai-v2.hf.space/predict"
 
-if not os.path.exists(model_path):
-    raise FileNotFoundError(f"ملف {model_path} مش موجود! اتأكد إنك رفعته في الـ Space بنفس الاسم.")
+headers = {"Authorization": f"Bearer {HF_TOKEN}"}
 
-# 2. تحميل الموديل
-interpreter = tflite.Interpreter(model_path=model_path)
-interpreter.allocate_tensors()
+# 3. القاموس العربي
+parts_dictionary = {
+    "Exhaust": {"ar": "العادم (الشكمان)", "desc": "طرد غازات الاحتراق.", "note": "الدخان الأسود يعني حرق وقود زيادة."},
+    "Engine": {"ar": "المحرك", "desc": "قلب السيارة المسؤول عن الحركة.", "note": "حافظ على تغيير الزيت."},
+    "Battery": {"ar": "البطارية", "desc": "مصدر الطاقة لبدء التشغيل.", "note": "تأكد من سلامة الأقطاب."},
+    # ... تقدر تزود باقي القاموس هنا ...
+}
 
-input_details = interpreter.get_input_details()
-output_details = interpreter.get_output_details()
+uploaded_file = st.file_uploader("ارفع صورة القطعة...", type=["jpg", "png", "jpeg"])
 
-# 3. القائمة الكاملة (لازم تكون بنفس الترتيب اللي اتدرب عليه الموديل)
-labels = [
-    "Engine", "Transmission", "Battery", "Alternator", "Radiator", 
-    "Water Pump", "Fuel Pump", "Starter", "Spark Plugs", "Cooling Fans", 
-    "Headlights", "Exhaust", "Fuel Filter", "Air Filter"
-]
-
-def predict(image):
-    try:
-        # تجهيز الصورة: تحويلها للحجم اللي الموديل عاوزه (غالباً 224x224)
-        input_shape = input_details[0]['shape']
-        height, width = input_shape[1], input_shape[2]
-        
-        img = image.resize((width, height)).convert('RGB')
-        img_array = np.array(img, dtype=np.float32)
-        
-        # تظبيط أبعاد المصفوفة (Add batch dimension)
-        img_array = np.expand_dims(img_array, axis=0)
-        
-        # "Normalization" - الموديلات غالباً بتحتاج الأرقام بين 0 و 1 أو -1 و 1
-        img_array = img_array / 255.0 
-
-        # تشغيل الفحص
-        interpreter.set_tensor(input_details[0]['index'], img_array)
-        interpreter.invoke()
-        
-        # استخراج النتيجة
-        output_data = interpreter.get_tensor(output_details[0]['index'])
-        prediction_index = np.argmax(output_data[0])
-        
-        return labels[prediction_index]
-    except Exception as e:
-        return f"Error during prediction: {str(e)}"
-
-# 4. واجهة Gradio
-demo = gr.Interface(
-    fn=predict, 
-    inputs=gr.Image(type="pil"), 
-    outputs="text",
-    title="Car Parts AI V2"
-)
-
-if __name__ == "__main__":
-    demo.launch()
+if uploaded_file:
+    img = Image.open(uploaded_file)
+    st.image(img, caption="الصورة المرفوعة", use_column_width=True)
+    
+    # تحويل الصورة لـ Base64
+    buf = io.BytesIO()
+    img.save(buf, format="JPEG")
+    img_b64 = base64.b64encode(buf.getvalue()).decode("utf-8")
+    
+    if st.button("بدء الفحص الذكي"):
+        with st.spinner("جاري تحليل الصورة..."):
+            try:
+                payload = {"data": [f"data:image/jpeg;base64,{img_b64}"]}
+                response = requests.post(API_URL, headers=headers, json=payload, timeout=30)
+                
+                if response.status_code == 200:
+                    label = response.json()['data'][0]
+                    if label in parts_dictionary:
+                        p = parts_dictionary[label]
+                        st.success(f"✅ تم التعرف على: {p['ar']}")
+                    else:
+                        st.write(f"🔍 النتيجة: {label}")
+                else:
+                    st.error(f"خطأ في الاتصال بالسيرفر: {response.status_code}")
+            except Exception as e:
+                st.error("السيرفر في Hugging Face لسه بيقوم، جرب كمان ثواني.")
