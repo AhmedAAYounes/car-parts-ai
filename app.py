@@ -7,13 +7,14 @@ import io
 st.set_page_config(page_title="مكتشف قطع الغيار الذكي", page_icon="⚙️")
 st.title("⚙️ نظام فحص أجزاء السيارة")
 
-# 2. بيانات الربط (حط بياناتك هنا)
-HF_TOKEN = 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 # التوكين بتاعك
-API_URL = "https://api-inference.huggingface.co/models/el7resh/car-parts-ai" # لينك السبيس
+# 2. بيانات الربط
+# تم تصحيح السطر القادم بإضافة علامات التنصيص
+HF_TOKEN = "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" 
+API_URL = "https://api-inference.huggingface.co/models/el7resh/car-parts-ai"
 
 headers = {"Authorization": f"Bearer {HF_TOKEN}"}
 
-# 3. القاموس الشامل (هنا حطيتلك كل اللي طلبته)
+# 3. القاموس الشامل
 parts_dictionary = {
     "Engine": {
         "ar": "المحرك",
@@ -87,7 +88,7 @@ parts_dictionary = {
     }
 }
 
-# 4. كود الرفع والمعالجة (زي ما هو)
+# 4. كود الرفع والمعالجة
 uploaded_file = st.file_uploader("ارفع صورة القطعة...", type=["jpg", "png", "jpeg"])
 
 if uploaded_file:
@@ -102,13 +103,16 @@ if uploaded_file:
     output = response.json()
     
     try:
-        label = output[0]['label']
-        if label in parts_dictionary:
-            info = parts_dictionary[label]
-            st.success(f"✅ تم التعرف على: {info['ar']}")
-            st.info(f"ℹ️ **الوصف:** {info['desc']}")
-            st.warning(f"💡 **نصيحة:** {info['note']}")
+        if isinstance(output, list) and len(output) > 0:
+            label = output[0]['label']
+            if label in parts_dictionary:
+                info = parts_dictionary[label]
+                st.success(f"✅ تم التعرف على: {info['ar']}")
+                st.info(f"ℹ️ **الوصف:** {info['desc']}")
+                st.warning(f"💡 **نصيحة:** {info['note']}")
+            else:
+                st.write(f"تم التعرف على قطعة: {label}")
         else:
-            st.write(f"تم التعرف على قطعة: {label}")
-    except:
+            st.error("السيرفر لم يعطِ نتيجة، تأكد أن الموديل يعمل.")
+    except Exception as e:
         st.error("السيرفر السحابي لسه بيجهز، جرب كمان ثواني!")
