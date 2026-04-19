@@ -2,142 +2,57 @@ import streamlit as st
 from PIL import Image
 import requests
 import io
+import base64
 
 # 1. إعدادات الموقع
 st.set_page_config(page_title="مكتشف قطع الغيار الذكي", page_icon="⚙️")
 st.title("⚙️ نظام فحص أجزاء السيارة")
 
 # 2. بيانات الربط
-# تم تصحيح السطر القادم بإضافة علامات التنصيص
 HF_TOKEN = "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" 
-API_URL = "https://api-inference.huggingface.co/models/el7resh/car-parts-ai"
+API_URL = "https://el7resh-car-parts-ai.hf.space" # الرابط المباشر
 
 headers = {"Authorization": f"Bearer {HF_TOKEN}"}
 
-# 3. القاموس الشامل
+# 3. القاموس (حطيتلك أهم القطع عشان نجرب)
 parts_dictionary = {
-    "Engine": {
-        "ar": "المحرك",
-        "desc": "قلب السيارة المسؤول عن تحويل الوقود إلى حركة.",
-        "note": "افحص مستوى الزيت كل 1000 كم."
-    },
-    "Transmission": {
-        "ar": "ناقل الحركة (الجير)",
-        "desc": "المسؤول عن نقل قوة المحرك للعجلات والتحكم في السرعات.",
-        "note": "تغيير زيت الجير في مواعيده يحميه من التآكل."
-    },
-    "Battery": {
-        "ar": "البطارية",
-        "desc": "تخزن الطاقة الكهربائية اللازمة لبدء تشغيل المحرك والأنوار.",
-        "note": "تأكد من نظافة أقطاب البطارية من الأملاح."
-    },
-    "Alternator": {
-        "ar": "الدينامو",
-        "desc": "يقوم بتوليد الكهرباء لشحن البطارية أثناء سير السيارة.",
-        "note": "ضعف الإضاءة قد يكون علامة على ضعف الدينامو."
-    },
-    "Radiator": {
-        "ar": "الرديتر",
-        "desc": "يقوم بتبريد سائل المحرك لمنع ارتفاع درجة الحرارة.",
-        "note": "استخدم دائماً مياه التبريد المخصصة (الخضراء أو الحمراء)."
-    },
-    "Water Pump": {
-        "ar": "مضخة الماء (الطلمبة)",
-        "desc": "تقوم بتدوير سائل التبريد بين المحرك والرديتر.",
-        "note": "أي تسريب مياه منها يتطلب تغييراً فورياً."
-    },
-    "Fuel Pump": {
-        "ar": "مضخة الوقود (طلمبة البنزين)",
-        "desc": "تضخ البنزين من الخزان إلى المحرك بضغط محدد.",
-        "note": "لا تترك خزان الوقود يفرغ تماماً حتى لا تسخن المضخة."
-    },
-    "Starter": {
-        "ar": "السلف (مارش)",
-        "desc": "المحرك الكهربائي الصغير المسؤول عن بدء دوران المحرك الكبير.",
-        "note": "إذا سمعت صوت تكة عند التشغيل، فقد يكون العطل من السلف."
-    },
-    "Spark Plugs": {
-        "ar": "شمعات الاحتراق (البواجي)",
-        "desc": "تعطي الشرارة الكهربائية اللازمة لحرق الوقود.",
-        "note": "تغييرها بانتظام يحسن استهلاك البنزين وسحب السيارة."
-    },
-    "Cooling Fans": {
-        "ar": "مراوح التبريد",
-        "desc": "تعمل على سحب الهواء عبر الرديتر لتبريد المياه.",
-        "note": "تأكد من عمل المروحة فور ارتفاع حرارة المحرك."
-    },
-    "Headlights": {
-        "ar": "أضواء السيارة",
-        "desc": "كشافات الإضاءة الأمامية والجانبية للرؤية الليلية والأمان.",
-        "note": "حافظ على نظافة العدسات للحصول على أفضل إضاءة."
-    },
-    "Exhaust": {
-        "ar": "العادم (الشكمان)",
-        "desc": "المسؤول عن طرد غازات الاحتراق خارج المحرك وتقليل الضوضاء.",
-        "note": "خروج دخان ملون قد يشير لمشكلة داخل المحرك."
-    },
-    "Fuel Filter": {
-        "ar": "فلتر البنزين",
-        "desc": "ينقي الوقود من الشوائب قبل وصوله للمحرك.",
-        "note": "انسداده يسبب تقطيع في أداء السيارة."
-    },
-    "Air Filter": {
-        "ar": "فلتر الهواء",
-        "desc": "يمنع دخول الأتربة والشوائب لغرفة الاحتراق بالمحرك.",
-        "note": "نظفه باستمرار وغيره كل 10 آلاف كم."
-    }
+    "Exhaust": {"ar": "العادم (الشكمان)", "desc": "طرد غازات الاحتراق خارج المحرك.", "note": "الدخان الأسود يعني حرق وقود زيادة."},
+    "Engine": {"ar": "المحرك", "desc": "قلب السيارة المسؤول عن الحركة.", "note": "حافظ على تغيير الزيت في موعده."},
+    "Battery": {"ar": "البطارية", "desc": "مصدر الطاقة لبدء التشغيل.", "note": "تأكد من سلامة الأقطاب."},
 }
 
-# 4. كود الرفع والمعالجة
+# 4. رفع الصورة
 uploaded_file = st.file_uploader("ارفع صورة القطعة...", type=["jpg", "png", "jpeg"])
 
 if uploaded_file:
     img = Image.open(uploaded_file)
     st.image(img, caption="الصورة المرفوعة", use_column_width=True)
     
+    # تحويل الصورة لصيغة يفهمها الرابط المباشر
     buf = io.BytesIO()
     img.save(buf, format="JPEG")
+    img_b64 = base64.b64encode(buf.getvalue()).decode("utf-8")
     
-    # استدعاء الـ API من Hugging Face
-    response = requests.post(API_URL, headers=headers, data=buf.getvalue())
-    output = response.json()
-    
-    try:
-        if isinstance(output, list) and len(output) > 0:
-            label = output[0]['label']
-            if label in parts_dictionary:
-                info = parts_dictionary[label]
-                st.success(f"✅ تم التعرف على: {info['ar']}")
-                st.info(f"ℹ️ **الوصف:** {info['desc']}")
-                st.warning(f"💡 **نصيحة:** {info['note']}")
-            else:
-                st.write(f"تم التعرف على قطعة: {label}")
-        else:
-            st.error("السيرفر لم يعطِ نتيجة، تأكد أن الموديل يعمل.")
-    except Exception as e:
-        st.error("السيرفر السحابي لسه بيجهز، جرب كمان ثواني!")
-# استدعاء الـ API من Hugging Face
-    with st.spinner("جاري تحليل الصورة.. انتظر لحظة"):
-        response = requests.post(API_URL, headers=headers, data=buf.getvalue())
-        
-        # التأكد إن السيرفر شغال قبل ما نقرأ النتيجة
-        if response.status_code == 200:
+    if st.button("بدء الفحص الذكي"):
+        with st.spinner("جاري تحليل الصورة..."):
             try:
-                output = response.json()
-                if isinstance(output, list) and len(output) > 0:
-                    label = output[0]['label']
+                # الطريقة الصحيحة لإرسال البيانات لـ hf.space
+                payload = {"data": [f"data:image/jpeg;base64,{img_b64}"]}
+                response = requests.post(API_URL, headers=headers, json=payload)
+                
+                if response.status_code == 200:
+                    res_data = response.json()
+                    # استخراج النتيجة (Label)
+                    label = res_data['data'][0]['label']
+                    
                     if label in parts_dictionary:
-                        info = parts_dictionary[label]
-                        st.success(f"✅ تم التعرف على: {info['ar']}")
-                        st.info(f"ℹ️ **الوصف:** {info['desc']}")
-                        st.warning(f"💡 **نصيحة:** {info['note']}")
+                        p = parts_dictionary[label]
+                        st.success(f"✅ تم التعرف على: {p['ar']}")
+                        st.info(f"ℹ️ **الوصف:** {p['desc']}")
+                        st.warning(f"💡 **نصيحة:** {p['note']}")
                     else:
-                        st.write(f"🔍 تم التعرف على قطعة: {label} (غير مسجلة في القاموس)")
+                        st.write(f"🔍 تم التعرف على: {label}")
                 else:
-                    st.error("الموديل لم يستطع تحديد القطعة بدقة.")
+                    st.error("السيرفر السحابي مشغول، انتظر ثواني وجرب تاني.")
             except:
-                st.error("حدث خطأ في قراءة رد السيرفر، جرب مرة أخرى.")
-        elif response.status_code == 503:
-            st.warning("⚠️ السيرفر بيقوم دلوقتي (Loading)، جرب كمان 20 ثانية بالظبط وهتشتغل.")
-        else:
-            st.error(f"خطأ في الاتصال بالسيرفر: {response.status_code}")
+                st.error("مشكلة في الربط، تأكد إن السيرفر في Hugging Face مكتوب عليه Running.")
