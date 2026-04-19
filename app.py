@@ -1,22 +1,28 @@
 import gradio as gr
 import numpy as np
 from PIL import Image
-import tflite_runtime.interpreter as tflite
+import os
 
-# 1. تحميل الموديل الخاص بك
-# لازم تتأكد إن ملف model.tflite موجود في نفس الصفحة مع app.py
+# بنحاول نستورد المكتبة ولو مش موجودة بنطلع رسالة واضحة
 try:
-    interpreter = tflite.Interpreter(model_path="model.tflite")
-    interpreter.allocate_tensors()
-    
-    # استخراج تفاصيل المداخل والمخارج
-    input_details = interpreter.get_input_details()
-    output_details = interpreter.get_output_details()
-    floating_model = input_details[0]['dtype'] == np.float32
-except Exception as e:
-    print(f"Error loading model: {e}")
+    import tflite_runtime.interpreter as tflite
+except ImportError:
+    import tensorflow.lite as tflite
 
-# 2. القائمة الكاملة لأسماء القطع (بنفس ترتيب تدريب الموديل)
+# 1. التأكد من وجود ملف الموديل في المكان الصح
+model_path = "model.tflite"
+
+if not os.path.exists(model_path):
+    raise FileNotFoundError(f"ملف {model_path} مش موجود! اتأكد إنك رفعته في الـ Space بنفس الاسم.")
+
+# 2. تحميل الموديل
+interpreter = tflite.Interpreter(model_path=model_path)
+interpreter.allocate_tensors()
+
+input_details = interpreter.get_input_details()
+output_details = interpreter.get_output_details()
+
+# 3. القائمة الكاملة (لازم تكون بنفس الترتيب اللي اتدرب عليه الموديل)
 labels = [
     "Engine", "Transmission", "Battery", "Alternator", "Radiator", 
     "Water Pump", "Fuel Pump", "Starter", "Spark Plugs", "Cooling Fans", 
@@ -25,41 +31,37 @@ labels = [
 
 def predict(image):
     try:
-        # 3. معالجة الصورة لتناسب حجم مدخلات الموديل
-        height = input_details[0]['shape'][1]
-        width = input_details[0]['shape'][2]
+        # تجهيز الصورة: تحويلها للحجم اللي الموديل عاوزه (غالباً 224x224)
+        input_shape = input_details[0]['shape']
+        height, width = input_shape[1], input_shape[2]
         
-        # تغيير الحجم وتحويلها لمصفوفة
         img = image.resize((width, height)).convert('RGB')
-        input_data = np.expand_dims(img, axis=0)
+        img_array = np.array(img, dtype=np.float32)
+        
+        # تظبيط أبعاد المصفوفة (Add batch dimension)
+        img_array = np.expand_dims(img_array, axis=0)
+        
+        # "Normalization" - الموديلات غالباً بتحتاج الأرقام بين 0 و 1 أو -1 و 1
+        img_array = img_array / 255.0 
 
-        # تحويل البيانات لـ float لو الموديل بيطلب كدة
-        if floating_model:
-            input_data = (np.float32(input_data) - 127.5) / 127.5
-
-        # 4. تنفيذ عملية الفحص (Inference)
-        interpreter.set_tensor(input_details[0]['index'], input_data)
+        # تشغيل الفحص
+        interpreter.set_tensor(input_details[0]['index'], img_array)
         interpreter.invoke()
-
-        # 5. استلام النتائج وترتيبها
+        
+        # استخراج النتيجة
         output_data = interpreter.get_tensor(output_details[0]['index'])
-        results = np.squeeze(output_data)
+        prediction_index = np.argmax(output_data[0])
         
-        # الحصول على أعلى نسبة توقع
-        top_index = results.argmax()
-        
-        # إرجاع اسم القطعة
-        return labels[top_index]
+        return labels[prediction_index]
     except Exception as e:
-        return f"خطأ في المعالجة: {str(e)}"
+        return f"Error during prediction: {str(e)}"
 
-# 6. إعداد واجهة Gradio للعمل كـ API لموقع Streamlit
-# استخدمنا Interface بسيطة لأن Streamlit هو اللي هيعرض التنسيق الجمالي
+# 4. واجهة Gradio
 demo = gr.Interface(
     fn=predict, 
-    inputs=gr.Image(type="pil", label="ارفع صورة قطعة الغيار"), 
-    outputs=gr.Text(label="النتيجة"),
-    title="Car Parts Classifier API"
+    inputs=gr.Image(type="pil"), 
+    outputs="text",
+    title="Car Parts AI V2"
 )
 
 if __name__ == "__main__":
