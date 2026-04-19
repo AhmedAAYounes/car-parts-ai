@@ -1,122 +1,66 @@
-import streamlit as st
+import gradio as gr
+import numpy as np
 from PIL import Image
-import requests
-import io
-import base64
+import tflite_runtime.interpreter as tflite
 
-# 1. إعدادات الموقع
-st.set_page_config(page_title="مكتشف قطع الغيار الذكي", page_icon="⚙️")
-st.title("⚙️ نظام فحص أجزاء السيارة")
-
-# 2. بيانات الربط
-HF_TOKEN = "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"
-API_URL = "https://el7resh-car-parts-ai-v2.hf.space/predict"
-
-headers = {"Authorization": f"Bearer {HF_TOKEN}"}
-
-# 3. القاموس الشامل (كل القطع اللي ضفناها)
-parts_dictionary = {
-    "Engine": {
-        "ar": "المحرك",
-        "desc": "قلب السيارة المسؤول عن تحويل الوقود إلى حركة.",
-        "note": "افحص مستوى الزيت كل 1000 كم."
-    },
-    "Transmission": {
-        "ar": "ناقل الحركة (الجير)",
-        "desc": "المسؤول عن نقل قوة المحرك للعجلات والتحكم في السرعات.",
-        "note": "تغيير زيت الجير في مواعيده يحميه من التآكل."
-    },
-    "Battery": {
-        "ar": "البطارية",
-        "desc": "تخزن الطاقة الكهربائية اللازمة لبدء تشغيل المحرك والأنوار.",
-        "note": "تأكد من نظافة أقطاب البطارية من الأملاح."
-    },
-    "Alternator": {
-        "ar": "الدينامو",
-        "desc": "يقوم بتوليد الكهرباء لشحن البطارية أثناء سير السيارة.",
-        "note": "ضعف الإضاءة قد يكون علامة على ضعف الدينامو."
-    },
-    "Radiator": {
-        "ar": "الرديتر",
-        "desc": "يقوم بتبريد سائل المحرك لمنع ارتفاع درجة الحرارة.",
-        "note": "استخدم دائماً مياه التبريد المخصصة (الخضراء أو الحمراء)."
-    },
-    "Water Pump": {
-        "ar": "مضخة الماء (الطلمبة)",
-        "desc": "تقوم بتدوير سائل التبريد بين المحرك والرديتر.",
-        "note": "أي تسريب مياه منها يتطلب تغييراً فورياً."
-    },
-    "Fuel Pump": {
-        "ar": "مضخة الوقود (طلمبة البنزين)",
-        "desc": "تضخ البنزين من الخزان إلى المحرك بضغط محدد.",
-        "note": "لا تترك خزان الوقود يفرغ تماماً حتى لا تسخن المضخة."
-    },
-    "Starter": {
-        "ar": "السلف (مارش)",
-        "desc": "المحرك الكهربائي الصغير المسؤول عن بدء دوران المحرك الكبير.",
-        "note": "إذا سمعت صوت تكة عند التشغيل، فقد يكون العطل من السلف."
-    },
-    "Spark Plugs": {
-        "ar": "شمعات الاحتراق (البواجي)",
-        "desc": "تعطي الشرارة الكهربائية اللازمة لحرق الوقود.",
-        "note": "تغييرها بانتظام يحسن استهلاك البنزين وسحب السيارة."
-    },
-    "Cooling Fans": {
-        "ar": "مراوح التبريد",
-        "desc": "تعمل على سحب الهواء عبر الرديتر لتبريد المياه.",
-        "note": "تأكد من عمل المروحة فور ارتفاع حرارة المحرك."
-    },
-    "Headlights": {
-        "ar": "أضواء السيارة",
-        "desc": "كشافات الإضاءة الأمامية والجانبية للرؤية الليلية والأمان.",
-        "note": "حافظ على نظافة العدسات للحصول على أفضل إضاءة."
-    },
-    "Exhaust": {
-        "ar": "العادم (الشكمان)",
-        "desc": "المسؤول عن طرد غازات الاحتراق خارج المحرك وتقليل الضوضاء.",
-        "note": "خروج دخان ملون قد يشير لمشكلة داخل المحرك."
-    },
-    "Fuel Filter": {
-        "ar": "فلتر البنزين",
-        "desc": "ينقي الوقود من الشوائب قبل وصوله للمحرك.",
-        "note": "انسداده يسبب تقطيع في أداء السيارة."
-    },
-    "Air Filter": {
-        "ar": "فلتر الهواء",
-        "desc": "يمنع دخول الأتربة والشوائب لغرفة الاحتراق بالمحرك.",
-        "note": "نظفه باستمرار وغيره كل 10 آلاف كم."
-    }
-}
-
-# 4. كود المعالجة
-uploaded_file = st.file_uploader("ارفع صورة القطعة...", type=["jpg", "png", "jpeg"])
-
-if uploaded_file:
-    img = Image.open(uploaded_file)
-    st.image(img, caption="الصورة المرفوعة", use_column_width=True)
+# 1. تحميل الموديل الخاص بك
+# لازم تتأكد إن ملف model.tflite موجود في نفس الصفحة مع app.py
+try:
+    interpreter = tflite.Interpreter(model_path="model.tflite")
+    interpreter.allocate_tensors()
     
-    buf = io.BytesIO()
-    img.save(buf, format="JPEG")
-    img_b64 = base64.b64encode(buf.getvalue()).decode("utf-8")
-    
-    if st.button("بدء الفحص الذكي"):
-        with st.spinner("جاري تحليل الصورة..."):
-            try:
-                payload = {"data": [f"data:image/jpeg;base64,{img_b64}"]}
-                response = requests.post(API_URL, headers=headers, json=payload, timeout=30)
-                
-                if response.status_code == 200:
-                    res_data = response.json()
-                    label = res_data['data'][0]['label']
-                    
-                    if label in parts_dictionary:
-                        p = parts_dictionary[label]
-                        st.success(f"✅ تم التعرف على: {p['ar']}")
-                        st.info(f"ℹ️ **الوصف:** {p['desc']}")
-                        st.warning(f"💡 **نصيحة:** {p['note']}")
-                    else:
-                        st.write(f"🔍 تم التعرف على: {label}")
-                else:
-                    st.error(f"مشكلة في السيرفر: {response.status_code}")
-            except:
-                st.error("السيرفر لسه بيقوم، جرب تاني كمان ثواني.")
+    # استخراج تفاصيل المداخل والمخارج
+    input_details = interpreter.get_input_details()
+    output_details = interpreter.get_output_details()
+    floating_model = input_details[0]['dtype'] == np.float32
+except Exception as e:
+    print(f"Error loading model: {e}")
+
+# 2. القائمة الكاملة لأسماء القطع (بنفس ترتيب تدريب الموديل)
+labels = [
+    "Engine", "Transmission", "Battery", "Alternator", "Radiator", 
+    "Water Pump", "Fuel Pump", "Starter", "Spark Plugs", "Cooling Fans", 
+    "Headlights", "Exhaust", "Fuel Filter", "Air Filter"
+]
+
+def predict(image):
+    try:
+        # 3. معالجة الصورة لتناسب حجم مدخلات الموديل
+        height = input_details[0]['shape'][1]
+        width = input_details[0]['shape'][2]
+        
+        # تغيير الحجم وتحويلها لمصفوفة
+        img = image.resize((width, height)).convert('RGB')
+        input_data = np.expand_dims(img, axis=0)
+
+        # تحويل البيانات لـ float لو الموديل بيطلب كدة
+        if floating_model:
+            input_data = (np.float32(input_data) - 127.5) / 127.5
+
+        # 4. تنفيذ عملية الفحص (Inference)
+        interpreter.set_tensor(input_details[0]['index'], input_data)
+        interpreter.invoke()
+
+        # 5. استلام النتائج وترتيبها
+        output_data = interpreter.get_tensor(output_details[0]['index'])
+        results = np.squeeze(output_data)
+        
+        # الحصول على أعلى نسبة توقع
+        top_index = results.argmax()
+        
+        # إرجاع اسم القطعة
+        return labels[top_index]
+    except Exception as e:
+        return f"خطأ في المعالجة: {str(e)}"
+
+# 6. إعداد واجهة Gradio للعمل كـ API لموقع Streamlit
+# استخدمنا Interface بسيطة لأن Streamlit هو اللي هيعرض التنسيق الجمالي
+demo = gr.Interface(
+    fn=predict, 
+    inputs=gr.Image(type="pil", label="ارفع صورة قطعة الغيار"), 
+    outputs=gr.Text(label="النتيجة"),
+    title="Car Parts Classifier API"
+)
+
+if __name__ == "__main__":
+    demo.launch()
