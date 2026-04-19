@@ -116,3 +116,28 @@ if uploaded_file:
             st.error("السيرفر لم يعطِ نتيجة، تأكد أن الموديل يعمل.")
     except Exception as e:
         st.error("السيرفر السحابي لسه بيجهز، جرب كمان ثواني!")
+# استدعاء الـ API من Hugging Face
+    with st.spinner("جاري تحليل الصورة.. انتظر لحظة"):
+        response = requests.post(API_URL, headers=headers, data=buf.getvalue())
+        
+        # التأكد إن السيرفر شغال قبل ما نقرأ النتيجة
+        if response.status_code == 200:
+            try:
+                output = response.json()
+                if isinstance(output, list) and len(output) > 0:
+                    label = output[0]['label']
+                    if label in parts_dictionary:
+                        info = parts_dictionary[label]
+                        st.success(f"✅ تم التعرف على: {info['ar']}")
+                        st.info(f"ℹ️ **الوصف:** {info['desc']}")
+                        st.warning(f"💡 **نصيحة:** {info['note']}")
+                    else:
+                        st.write(f"🔍 تم التعرف على قطعة: {label} (غير مسجلة في القاموس)")
+                else:
+                    st.error("الموديل لم يستطع تحديد القطعة بدقة.")
+            except:
+                st.error("حدث خطأ في قراءة رد السيرفر، جرب مرة أخرى.")
+        elif response.status_code == 503:
+            st.warning("⚠️ السيرفر بيقوم دلوقتي (Loading)، جرب كمان 20 ثانية بالظبط وهتشتغل.")
+        else:
+            st.error(f"خطأ في الاتصال بالسيرفر: {response.status_code}")
