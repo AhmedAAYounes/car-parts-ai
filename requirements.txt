@@ -1,4 +1,4 @@
-tensorflow-cpu==2.15.0
-streamlit==1.32.0
-Pillow==10.2.0
-numpy==1.26.4
+https://storage.googleapis.com/tensorflow/linux/cpu/tensorflow_cpu-2.12.0-cp310-cp310-manylinux_2_17_x86_64.manylinux2014_x86_64.whl
+streamlit==1.24.0
+Pillow==9.5.0
+numpy==1.23.5
