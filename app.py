@@ -37,7 +37,13 @@ if uploaded_file:
                 img.save(temp_path)
                 
                 result = client.predict(
-                    image=temp_path,
+                    img.save(temp_path)
+                
+                # التعديل هنا: نستخدم handle_file عشان نأكد إنه ملف
+                from gradio_client import handle_file
+                
+                result = client.predict(
+                    image=handle_file(temp_path), # التعديل في السطر ده
                     api_name="/predict"
                 )
                 
