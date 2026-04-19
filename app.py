@@ -1,41 +1,114 @@
 import streamlit as st
 from PIL import Image
-import numpy as np
+import requests
+import io
 
-st.set_page_config(page_title="مكتشف قطع الغيار", page_icon="🏎️")
-st.title("🏎️ نظام التعرف الذكي على قطع السيارات")
+# 1. إعدادات الموقع
+st.set_page_config(page_title="مكتشف قطع الغيار الذكي", page_icon="⚙️")
+st.title("⚙️ نظام فحص أجزاء السيارة")
 
-# مصفوفة الملامح (ده ذكاء اصطناعي يدوي)
-# بنحدد ملامح تقريبية لكل قطعة (الألوان، التباين، الكثافة)
-data_map = {
-    "موتور (Engine)": {"color_score": 0.5, "edge_density": 0.8},
-    "ناقل حركة (Gearbox)": {"color_score": 0.4, "edge_density": 0.6},
-    "فانوس أمامي": {"color_score": 0.9, "edge_density": 0.3},
-    "تيل فرامل": {"color_score": 0.2, "edge_density": 0.5}
+# 2. بيانات الربط (حط بياناتك هنا)
+HF_TOKEN = "hf_xxxxxxxxxxxxxxxxxxxx" # التوكين بتاعك
+API_URL = "https://api-inference.huggingface.co/models/username/space_name" # لينك السبيس
+
+headers = {"Authorization": f"Bearer {HF_TOKEN}"}
+
+# 3. القاموس الشامل (هنا حطيتلك كل اللي طلبته)
+parts_dictionary = {
+    "Engine": {
+        "ar": "المحرك",
+        "desc": "قلب السيارة المسؤول عن تحويل الوقود إلى حركة.",
+        "note": "افحص مستوى الزيت كل 1000 كم."
+    },
+    "Transmission": {
+        "ar": "ناقل الحركة (الجير)",
+        "desc": "المسؤول عن نقل قوة المحرك للعجلات والتحكم في السرعات.",
+        "note": "تغيير زيت الجير في مواعيده يحميه من التآكل."
+    },
+    "Battery": {
+        "ar": "البطارية",
+        "desc": "تخزن الطاقة الكهربائية اللازمة لبدء تشغيل المحرك والأنوار.",
+        "note": "تأكد من نظافة أقطاب البطارية من الأملاح."
+    },
+    "Alternator": {
+        "ar": "الدينامو",
+        "desc": "يقوم بتوليد الكهرباء لشحن البطارية أثناء سير السيارة.",
+        "note": "ضعف الإضاءة قد يكون علامة على ضعف الدينامو."
+    },
+    "Radiator": {
+        "ar": "الرديتر",
+        "desc": "يقوم بتبريد سائل المحرك لمنع ارتفاع درجة الحرارة.",
+        "note": "استخدم دائماً مياه التبريد المخصصة (الخضراء أو الحمراء)."
+    },
+    "Water Pump": {
+        "ar": "مضخة الماء (الطلمبة)",
+        "desc": "تقوم بتدوير سائل التبريد بين المحرك والرديتر.",
+        "note": "أي تسريب مياه منها يتطلب تغييراً فورياً."
+    },
+    "Fuel Pump": {
+        "ar": "مضخة الوقود (طلمبة البنزين)",
+        "desc": "تضخ البنزين من الخزان إلى المحرك بضغط محدد.",
+        "note": "لا تترك خزان الوقود يفرغ تماماً حتى لا تسخن المضخة."
+    },
+    "Starter": {
+        "ar": "السلف (مارش)",
+        "desc": "المحرك الكهربائي الصغير المسؤول عن بدء دوران المحرك الكبير.",
+        "note": "إذا سمعت صوت تكة عند التشغيل، فقد يكون العطل من السلف."
+    },
+    "Spark Plugs": {
+        "ar": "شمعات الاحتراق (البواجي)",
+        "desc": "تعطي الشرارة الكهربائية اللازمة لحرق الوقود.",
+        "note": "تغييرها بانتظام يحسن استهلاك البنزين وسحب السيارة."
+    },
+    "Cooling Fans": {
+        "ar": "مراوح التبريد",
+        "desc": "تعمل على سحب الهواء عبر الرديتر لتبريد المياه.",
+        "note": "تأكد من عمل المروحة فور ارتفاع حرارة المحرك."
+    },
+    "Headlights": {
+        "ar": "أضواء السيارة",
+        "desc": "كشافات الإضاءة الأمامية والجانبية للرؤية الليلية والأمان.",
+        "note": "حافظ على نظافة العدسات للحصول على أفضل إضاءة."
+    },
+    "Exhaust": {
+        "ar": "العادم (الشكمان)",
+        "desc": "المسؤول عن طرد غازات الاحتراق خارج المحرك وتقليل الضوضاء.",
+        "note": "خروج دخان ملون قد يشير لمشكلة داخل المحرك."
+    },
+    "Fuel Filter": {
+        "ar": "فلتر البنزين",
+        "desc": "ينقي الوقود من الشوائب قبل وصوله للمحرك.",
+        "note": "انسداده يسبب تقطيع في أداء السيارة."
+    },
+    "Air Filter": {
+        "ar": "فلتر الهواء",
+        "desc": "يمنع دخول الأتربة والشوائب لغرفة الاحتراق بالمحرك.",
+        "note": "نظفه باستمرار وغيره كل 10 آلاف كم."
+    }
 }
 
-uploaded_file = st.file_uploader("اختر صورة قطعة غيار...", type=["jpg", "png", "jpeg"])
+# 4. كود الرفع والمعالجة (زي ما هو)
+uploaded_file = st.file_uploader("ارفع صورة القطعة...", type=["jpg", "png", "jpeg"])
 
-if uploaded_file is not None:
-    image = Image.open(uploaded_file).convert('RGB')
-    st.image(image, caption='الصورة المرفوعة', use_column_width=True)
+if uploaded_file:
+    img = Image.open(uploaded_file)
+    st.image(img, caption="الصورة المرفوعة", use_column_width=True)
     
-    with st.spinner('جاري تحليل البصمة الرقمية للقطعة...'):
-        # تحليل فعلي للصورة المرفوعة
-        img_array = np.array(image.resize((100, 100)))
-        avg_color = np.mean(img_array) / 255.0
-        edges = np.mean(np.abs(np.diff(img_array))) / 255.0
-        
-        # البحث عن أقرب قطعة للملامح دي
-        best_match = "قطعة غير معروفة"
-        min_diff = float('inf')
-        
-        for label, features in data_map.items():
-            diff = abs(avg_color - features["color_score"]) + abs(edges - features["edge_density"])
-            if diff < min_diff:
-                min_diff = diff
-                best_match = label
-
-    st.balloons()
-    st.success(f"✅ النتيجة: هذه القطعة هي غالباً {best_match}")
-    st.metric(label="دقة المطابقة", value=f"{max(0, 100 - (min_diff*100)):.1f}%")
+    buf = io.BytesIO()
+    img.save(buf, format="JPEG")
+    
+    # استدعاء الـ API من Hugging Face
+    response = requests.post(API_URL, headers=headers, data=buf.getvalue())
+    output = response.json()
+    
+    try:
+        label = output[0]['label']
+        if label in parts_dictionary:
+            info = parts_dictionary[label]
+            st.success(f"✅ تم التعرف على: {info['ar']}")
+            st.info(f"ℹ️ **الوصف:** {info['desc']}")
+            st.warning(f"💡 **نصيحة:** {info['note']}")
+        else:
+            st.write(f"تم التعرف على قطعة: {label}")
+    except:
+        st.error("السيرفر السحابي لسه بيجهز، جرب كمان ثواني!")
