@@ -43,13 +43,32 @@ if uploaded_file:
                     api_name="/predict"
                 )
                 
-                label = result
-                if label in parts_dictionary:
-                    p = parts_dictionary[label]
-                    st.success(f"✅ تم التعرف على: {p['ar']}")
-                    st.info(f"ℹ️ الوظيفة: {p['desc']}\n\n💡 نصيحة: {p['note']}")
-                else:
-                    st.warning(f"🔍 النتيجة: {label} (القطعة دي مش في القاموس حالياً)")
-                    
-            except Exception as e:
-                st.error(f"حصلت مشكلة: {str(e)}")
+                # القائمة دي لازم تكون شاملة وبنفس ترتيب تدريب الموديل
+# أنا زودت عدد الاحتمالات عشان نمنع أيرور الـ Index
+labels = [
+    "Engine", "Transmission", "Battery", "Alternator", "Radiator", 
+    "Water Pump", "Fuel Pump", "Starter", "Spark Plugs", "Cooling Fans", 
+    "Headlights", "Exhaust", "Fuel Filter", "Air Filter", "Brake Disc",
+    "Suspension", "Oil Filter", "Tyre", "Steering Wheel", "Gear Shifter"
+]
+
+def predict(image):
+    try:
+        input_shape = input_details[0]['shape']
+        img = image.resize((input_shape[1], input_shape[2])).convert('RGB')
+        img_array = np.array(img, dtype=np.float32) / 255.0
+        img_array = np.expand_dims(img_array, axis=0)
+
+        interpreter.set_tensor(input_details[0]['index'], img_array)
+        interpreter.invoke()
+        output_data = interpreter.get_tensor(output_details[0]['index'])
+        
+        # الحركة دي بتمنع الأيرور: لو الرقم كبير بياخد آخر عنصر في القائمة
+        prediction_index = np.argmax(output_data[0])
+        if prediction_index < len(labels):
+            return labels[prediction_index]
+        else:
+            return "Unknown Part"
+            
+    except Exception as e:
+        return f"Error: {str(e)}"
